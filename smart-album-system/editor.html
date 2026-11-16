@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能相册系统 - 编辑</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .editor-container {
+            display: grid;
+            grid-template-columns: 80px 1fr 250px;
+            height: calc(100vh - 60px);
+        }
+
+        .toolbar {
+            background-color: #2c3e50;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            padding: 10px 0;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .tool-btn {
+            background: none;
+            border: none;
+            color: #bdc3c7;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 8px;
+            transition: 0.3s;
+        }
+
+        .tool-btn:hover, .tool-btn.active {
+            color: white;
+            background-color: #34495e;
+        }
+
+        .tool-label {
+            font-size: 10px;
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        .preview-area {
+            background-color: #ecf0f1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .canvas-container {
+            width: 80%;
+            height: 80%;
+            background-color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 用于主体隔离的专门滤镜（模拟） */
+        .blur-background {
+            filter: blur(var(--blur-px));
+            transition: 0.3s;
+        }
+
+        .subject-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            clip-path: ellipse(30% 45% at 50% 50%); /* 模拟人像主体掩码 */
+            z-index: 5;
+            transition: 0.3s;
+        }
+
+        #previewImage {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.1s ease-out; /* 平滑的手势响应 */
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .params-panel {
+            background-color: white;
+            border-left: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .param-group {
+            margin-bottom: 20px;
+        }
+
+        .param-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #606266;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .action-buttons {
+            margin-top: auto;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <span style="font-size: 24px;">📸</span> 智能相册系统
+        </div>
+        <nav class="nav-menu">
+            <a href="index.html" class="nav-item">主页</a>
+            <a href="camera.html" class="nav-item">拍照</a>
+            <a href="gallery.html" class="nav-item">浏览</a>
+            <a href="editor.html" class="nav-item active">编辑</a>
+            <a href="settings.html" class="nav-item">设置</a>
+        </nav>
+    </header>
+
+    <div class="editor-container">
+        <!-- 左侧工具栏 -->
+        <aside class="toolbar">
+            <button class="tool-btn active" onclick="selectTool('basic')">
+                🛠️
+                <div class="tool-label">基础</div>
+            </button>
+            <button class="tool-btn" onclick="selectTool('crop')">
+                ✂️
+                <div class="tool-label">裁剪</div>
+            </button>
+            <button class="tool-btn" onclick="selectTool('beauty')">
+                ✨
+                <div class="tool-label">美颜</div>
+            </button>
+            <button class="tool-btn" onclick="selectTool('slimming')">
+                🧍
+                <div class="tool-label">瘦身</div>
+            </button>
+            <button class="tool-btn" onclick="selectTool('filter')">
+                🎨
+                <div class="tool-label">滤镜</div>
+            </button>
+            <button class="tool-btn" onclick="selectTool('erase')">
+                🧹
+                <div class="tool-label">路人消除</div>
+            </button>
+            <button class="tool-btn" onclick="selectTool('blur')">
+                💧
+                <div class="tool-label">背景虚化</div>
+            </button>
+            <button class="tool-btn" onclick="selectTool('ai')">
+                🤖
+                <div class="tool-label">AI文案</div>
+            </button>
+        </aside>
+
+        <!-- 中间预览区 -->
+        <main class="preview-area">
+            <div id="importPlaceholder" style="text-align: center; color: #95a5a6; cursor: pointer;" onclick="document.getElementById('editorFileInput').click()">
+                <div style="font-size: 60px;">🖼️</div>
+                <p>点击导入需要编辑的照片</p>
+                <p style="font-size: 12px; color: #909399; margin-top: 10px;">支持一次选择多张图片进行批量预览与手势切换</p>
+                <input type="file" id="editorFileInput" style="display: none;" accept="image/*" multiple onchange="handleEditorImport(this)">
+            </div>
+            <div class="canvas-container" id="canvasContainer" style="display: none;">
+                <!-- 用于背景模糊模拟的图层 -->
+                <div id="backgroundLayer" style="width: 100%; height: 100%;">
+                    <img id="previewImage" src="" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <!-- 顶层代表保持清晰的“主体” -->
+                <div id="subjectLayer" class="subject-layer" style="display: none;">
+                    <img id="subjectImage" src="" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                
+                <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; z-index: 10;">编辑模式</div>
+            </div>
+        </main>
+
+        <!-- 右侧参数面板 -->
+        <aside class="params-panel">
+            <h3>参数调整</h3>
+            <div id="toolParams">
+                <!-- 由 JS 注入的参数控制项 -->
+            </div>
+            
+            <!-- AI 文案生成结果 -->
+            <div id="aiResultArea" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e4e7ed;">
+                <h4 style="margin-top: 0; color: #409eff;">✨ AI 建议文案</h4>
+                <div id="aiCopyContent" style="font-size: 13px; line-height: 1.6; color: #606266; white-space: pre-wrap; max-height: 300px; overflow-y: auto;"></div>
+                <button class="btn btn-default" style="width: 100%; margin-top: 10px; font-size: 12px;" onclick="copyAiText()">复制全部文案</button>
+            </div>
+
+            <div id="gestureArea" style="display: none; margin-top: 20px; position: relative;">
+                <h4 style="margin-top: 0; color: #67c23a;">👋 浏览器端手势控制 (MediaPipe)</h4>
+                
+                <!-- 手势指南 -->
+                <div style="background: rgba(103, 194, 58, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px; color: #67c23a;">
+                    <div style="margin-bottom: 5px;"><b>全新高灵敏手势指南：</b></div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                        <span>☝️ 伸出1指：上一张</span>
+                        <span>✌️ 伸出2指：下一张</span>
+                        <span>🖐️ 张开手掌：放大</span>
+                        <span>✊ 握紧拳头：缩小</span>
+                    </div>
+                </div>
+
+                <div style="position: relative; width: 100%; aspect-ratio: 4/3; border-radius: 8px; overflow: hidden;">
+                    <video id="gestureVideo" autoplay playsinline style="width: 100%; height: 100%; transform: scaleX(-1); object-fit: cover;"></video>
+                    <canvas id="gestureCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1);"></canvas>
+                </div>
+                <div id="gestureStatus" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.6); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; z-index: 20;">正在初始化 AI 模型...</div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-default" onclick="reset()">重置</button>
+                <button class="btn btn-primary" onclick="save()">保存</button>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const toolParams = document.getElementById('toolParams');
+        const previewImage = document.getElementById('previewImage');
+        const subjectImage = document.getElementById('subjectImage');
+        const subjectLayer = document.getElementById('subjectLayer');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const importPlaceholder = document.getElementById('importPlaceholder');
+
+        // 相册切换数据
+        let albumPhotos = [];
+        let currentPhotoIndex = -1;
+
+        // 手势状态
+        let lastTouchX = 0;
+        let lastTouchDistance = 0;
+        let currentScale = 1;
+        let isZooming = false;
+
+        // 手势控制状态
+        let isGestureOn = false;
+        let lastGestureTime = 0;
+        let hands = null;
+        let camera = null;
+
+        // 当前滤镜/变换状态
+        let filters = {
+            brightness: 100,
+            contrast: 100,
+            saturate: 100,
+            blur: 0,
+            grayscale: 0,
+            sepia: 0,
+            'beauty-smooth': 0,
+            'beauty-white': 0
+        };
+        let transform = {
+            rotate: 0,
+            scale: 1,
+            flipX: 1,
+            flipY: 1
+        };
+
+        const tools = {
+            basic: [
+                { id: 'brightness', name: '亮度', min: 0, max: 200, val: 100 },
+                { id: 'contrast', name: '对比度', min: 0, max: 200, val: 100 },
+                { id: 'saturate', name: '饱和度', min: 0, max: 200, val: 100 }
+            ],
+            crop: [
+                { id: 'rotate', name: '旋转', min: 0, max: 360, val: 0 },
+                { id: 'scale', name: '缩放', min: 0.1, max: 3, val: 1, step: 0.1 },
+                { name: '水平翻转', type: 'toggle', action: 'flipX' },
+                { name: '垂直翻转', type: 'toggle', action: 'flipY' }
+            ],
+            beauty: [
+                { id: 'beauty-smooth', name: '基础磨皮', min: 0, max: 100, val: 0 },
+                { id: 'beauty-white', name: '基础美白', min: 0, max: 100, val: 0 },
+                { name: 'AI 语义分割美白', type: 'button', action: 'beauty-white-ai' },
+                { name: '腿部拉长', type: 'button', action: 'leg-stretch' }
+            ],
+            slimming: [
+                { id: 'slimming', name: '瘦腿/拉长强度', min: 0, max: 100, val: 50 },
+                { name: 'AI 智能瘦腿', type: 'button', action: 'leg-slimming-ai' },
+                { name: 'AI 腿部拉长', type: 'button', action: 'leg-stretch-ai' }
+            ],
+            filter: [
+                { id: 'grayscale', name: '黑白', min: 0, max: 100, val: 0 },
+                { id: 'sepia', name: '复古', min: 0, max: 100, val: 0 }
+            ],
+            erase: [
+                { name: '智能消除路人', type: 'button', action: 'erase-ai' }
+            ],
+            blur: [
+                { id: 'blur', name: '基础模糊', min: 0, max: 20, val: 0 },
+                { name: 'AI 背景羽化', type: 'button', action: 'blur-ai' }
+            ],
+            ai: [
+                { name: '生成自媒体文案', type: 'button', action: 'ai-copy' },
+                { name: '开启手势控制', type: 'button', action: 'gesture-on' },
+                { name: '关闭手势控制', type: 'button', action: 'gesture-off' }
+            ]
+        };
+
+        function handleEditorImport(input) {
+            const files = Array.from(input.files);
+            if (files.length > 0) {
+                // 清空之前的队列
+                albumPhotos = [];
+                let loadedCount = 0;
+
+                files.forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        albumPhotos.push({
+                            id: `local-${Date.now()}-${index}`,
+                            url: e.target.result,
+                            type: 'photo'
+                        });
+                        
+                        loadedCount++;
+                        // 当所有选择的文件加载完成后，显示第一个
+                        if (loadedCount === files.length) {
+                            currentPhotoIndex = 0;
+                            const photo = albumPhotos[currentPhotoIndex];
+                            previewImage.src = photo.url;
+                            subjectImage.src = photo.url;
+                            importPlaceholder.style.display = 'none';
+                            canvasContainer.style.display = 'block';
+                            reset();
+                            console.log(`成功导入 ${albumPhotos.length} 张照片。`);
+                        }
+                    }
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
+
+        function switchPhoto(direction) {
+            if (albumPhotos.length <= 1) return;
+            
+            currentPhotoIndex = (currentPhotoIndex + direction + albumPhotos.length) % albumPhotos.length;
+            
+            const photo = albumPhotos[currentPhotoIndex];
+            const url = photo.url.startsWith('data:') ? photo.url : `http://localhost:5000/uploads/${photo.filename}`;
+            
+            previewImage.src = url;
+            subjectImage.src = url;
+            
+            // 视觉反馈
+            canvasContainer.style.transition = 'none';
+            canvasContainer.style.opacity = '0.3';
+            setTimeout(() => {
+                canvasContainer.style.transition = 'opacity 0.3s';
+                canvasContainer.style.opacity = '1';
+            }, 50);
+            
+            reset();
+        }
+
+        // --- 手势处理 (MediaPipe Hands JS) ---
+        function initMediaPipeHands() {
+            if (hands) return;
+            
+            const videoElement = document.getElementById('gestureVideo');
+            const canvasElement = document.getElementById('gestureCanvas');
+            const canvasCtx = canvasElement.getContext('2d');
+            const status = document.getElementById('gestureStatus');
+
+            hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }});
+
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults((results) => {
+                // 绘制骨架用于视觉反馈
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    const landmarks = results.multiHandLandmarks[0];
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
+                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
+                    
+                    // 手势逻辑
+                    analyzeGestureLocal(landmarks, status);
+                } else {
+                    status.textContent = "🖐️ 请将手放入预览框";
+                }
+                canvasCtx.restore();
+            });
+
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    if (isGestureOn) await hands.send({image: videoElement});
+                },
+                width: 640,
+                height: 480
+            });
+        }
+
+        function analyzeGestureLocal(landmarks, statusElement) {
+            const now = Date.now();
+            if (now - lastGestureTime < 1000) return; // 防抖
+
+            // 1. 获取手指状态 (Tip.y < Base.y 代表手指伸出)
+            const isIndexUp = landmarks[8].y < landmarks[5].y;
+            const isMiddleUp = landmarks[12].y < landmarks[9].y;
+            const isRingUp = landmarks[16].y < landmarks[13].y;
+            const isPinkyUp = landmarks[20].y < landmarks[17].y;
+
+            // 2. 切换逻辑 (手指计数替代挥手)
+            // 上一张：仅伸出食指 (☝️)
+            if (isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+                handleGestureAction('swipe_right', statusElement); // 上一个
+                lastGestureTime = now;
+                return;
+            } 
+            // 下一张：伸出食指和中指 (✌️)
+            else if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
+                handleGestureAction('swipe_left', statusElement); // 下一个
+                lastGestureTime = now;
+                return;
+            }
+
+            // 3. 缩放逻辑 (手指计数)
+            // 放大：四指全部张开 (🖐️)
+            if (isIndexUp && isMiddleUp && isRingUp && isPinkyUp) {
+                handleGestureAction('open', statusElement);
+                lastGestureTime = now;
+            }
+            // 缩小：四指全部握紧 (✊)
+            else if (!isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+                handleGestureAction('fist', statusElement);
+                lastGestureTime = now;
+            }
+        }
+
+        async function startGestureControl() {
+            if (isGestureOn) return;
+            const area = document.getElementById('gestureArea');
+            area.style.display = 'block';
+            
+            initMediaPipeHands();
+            camera.start();
+            isGestureOn = true;
+        }
+
+        function stopGestureControl() {
+            isGestureOn = false;
+            if (camera) camera.stop();
+            document.getElementById('gestureArea').style.display = 'none';
+        }
+
+        function handleGestureAction(gesture, statusElement) {
+            switch(gesture) {
+                case 'swipe_left':
+                    statusElement.textContent = "👉 识别到：2指 (下一张)";
+                    switchPhoto(1);
+                    break;
+                case 'swipe_right':
+                    statusElement.textContent = "☝️ 识别到：1指 (上一张)";
+                    switchPhoto(-1);
+                    break;
+                case 'open':
+                    statusElement.textContent = "🖐️ 识别到：张开 (放大)";
+                    transform.scale = Math.min(transform.scale + 0.3, 5);
+                    applyStyles();
+                    break;
+                case 'fist':
+                    statusElement.textContent = "✊ 识别到：握拳 (缩小)";
+                    transform.scale = Math.max(transform.scale - 0.3, 0.5);
+                    applyStyles();
+                    break;
+            }
+        }
+
+        canvasContainer.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                lastTouchX = e.touches[0].clientX;
+                isZooming = false;
+            } else if (e.touches.length === 2) {
+                isZooming = true;
+                lastTouchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
+        }, { passive: false });
+
+        canvasContainer.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // 编辑时防止滚动
+            
+            if (e.touches.length === 1 && !isZooming) {
+                // 在 touchend 中检测潜在的滑动
+            } else if (e.touches.length === 2) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                
+                const delta = dist / lastTouchDistance;
+                lastTouchDistance = dist;
+                
+                // 更新缩放比例
+                transform.scale = Math.min(Math.max(0.5, transform.scale * delta), 5);
+                applyStyles();
+            }
+        }, { passive: false });
+
+        canvasContainer.addEventListener('touchend', (e) => {
+            if (e.changedTouches.length === 1 && !isZooming) {
+                const deltaX = e.changedTouches[0].clientX - lastTouchX;
+                if (Math.abs(deltaX) > 100) { // 滑动阈值
+                    switchPhoto(deltaX > 0 ? -1 : 1);
+                }
+            }
+            isZooming = false;
+        });
+
+        // 鼠标滚轮缩放支持
+        canvasContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            transform.scale = Math.min(Math.max(0.5, transform.scale * delta), 5);
+            applyStyles();
+        }, { passive: false });
+
+        function selectTool(toolName) {
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            if (window.event && window.event.currentTarget) {
+                window.event.currentTarget.classList.add('active');
+            } else {
+                // 如果没有事件（初始调用），可以尝试选中第一个对应的按钮
+                const firstBtn = document.querySelector(`.tool-btn[onclick*="'${toolName}'"]`);
+                if (firstBtn) firstBtn.classList.add('active');
+            }
+
+            const params = tools[toolName];
+            let html = '';
+            params.forEach(p => {
+                if (p.type === 'button') {
+                    html += `
+                        <div class="param-group">
+                            <button class="btn btn-primary" style="width: 100%" onclick="applyAction('${p.action}')">${p.name}</button>
+                        </div>
+                    `;
+                } else if (p.type === 'toggle') {
+                     html += `
+                        <div class="param-group">
+                            <button class="btn btn-default" style="width: 100%" onclick="applyAction('${p.action}')">${p.name}</button>
+                        </div>
+                    `;
+                } else {
+                    const currentVal = p.id in filters ? filters[p.id] : transform[p.id];
+                    html += `
+                        <div class="param-group">
+                            <label class="param-label">${p.name}</label>
+                            <input type="range" min="${p.min}" max="${p.max}" step="${p.step || 1}" value="${currentVal}" oninput="updateEffect('${p.id}', this.value, this)">
+                            <div style="text-align: right; font-size: 12px; color: #999;">${currentVal}</div>
+                        </div>
+                    `;
+                }
+            });
+            toolParams.innerHTML = html;
+        }
+
+        function updateEffect(id, value, el) {
+            if (id in filters) {
+                filters[id] = value;
+            } else if (id in transform) {
+                transform[id] = value;
+            }
+            applyStyles();
+            // 更新显示数值
+            if (el && el.nextElementSibling) {
+                el.nextElementSibling.textContent = value;
+            }
+        }
+
+        async function applyAction(action) {
+            if (action === 'flipX') {
+                transform.flipX *= -1;
+            } else if (action === 'flipY') {
+                transform.flipY *= -1;
+            } else if (action === 'beauty-white-ai') {
+                if (!previewImage.src || previewImage.src.startsWith('data:image')) {
+                    // 如果是初始状态或已是 dataURL
+                } else {
+                    alert("请先导入或选择一张有效的照片");
+                    return;
+                }
+                
+                console.log("发送 AI 美白请求，强度:", filters['beauty-white']);
+                 try {
+                     const response = await fetch('http://localhost:5000/whiten_face', {
+                         method: 'POST',
+                         headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({ 
+                             image: previewImage.src,
+                             strength: parseInt(filters['beauty-white']) || 50 
+                         })
+                     });
+                     const result = await response.json();
+                     if (result.image) {
+                         previewImage.src = result.image;
+                         subjectImage.src = result.image;
+                         alert("AI 美白处理完成！");
+                     } else {
+                         alert("处理失败: " + (result.error || "未知错误"));
+                     }
+                 } catch (err) {
+                     console.error("AI 美白失败:", err);
+                     alert("无法连接到后端服务器。");
+                 }
+                return;
+            } else if (action === 'erase-ai') {
+                if (!previewImage.src) return alert("请先导入照片");
+                alert("正在自动识别并消除路人，请稍候...");
+                try {
+                    const response = await fetch('http://localhost:5000/remove_passerby', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: previewImage.src })
+                    });
+                    const result = await response.json();
+                    if (result.image) {
+                        previewImage.src = result.image;
+                        subjectImage.src = result.image;
+                        alert(result.removed_count > 0 ? `成功消除 ${result.removed_count} 个路人！` : "未发现明显路人。");
+                    }
+                } catch (err) {
+                    alert("路人消除失败，请检查后端。");
+                }
+                return;
+            } else if (action === 'blur-ai') {
+                if (!previewImage.src) return alert("请先导入照片");
+                alert("正在执行 AI 背景羽化，请稍候...");
+                try {
+                    const response = await fetch('http://localhost:5000/blur_background', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: previewImage.src })
+                    });
+                    const result = await response.json();
+                    if (result.image) {
+                        previewImage.src = result.image;
+                        subjectImage.src = result.image;
+                        alert("背景羽化处理完成！");
+                    }
+                } catch (err) {
+                    alert("背景羽化失败，请检查后端。");
+                }
+                return;
+            } else if (action === 'ai-copy') {
+                if (!previewImage.src) return alert("请先导入照片");
+                
+                const aiArea = document.getElementById('aiResultArea');
+                const aiContent = document.getElementById('aiCopyContent');
+                
+                aiArea.style.display = 'block';
+                aiContent.innerHTML = "🤖 正在分析场景并生成文案，请稍候...\n(这可能需要 5-10 秒)";
+                
+                try {
+                    const response = await fetch('http://localhost:5000/generate_ai_copy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: previewImage.src })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        aiContent.textContent = result.copy;
+                    } else {
+                        aiContent.textContent = "❌ 生成失败: " + result.error;
+                    }
+                } catch (err) {
+                    aiContent.textContent = "❌ 无法连接到后端 AI 服务";
+                }
+                return;
+            } else if (action === 'gesture-on') {
+                startGestureControl();
+                return;
+            } else if (action === 'gesture-off') {
+                stopGestureControl();
+                return;
+            } else if (action === 'leg-slimming-ai') {
+                if (!previewImage.src) return alert("请先导入照片");
+                alert("正在执行 AI 智能瘦腿，请稍候...");
+                try {
+                    const response = await fetch('http://localhost:5000/leg_slimming', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            image: previewImage.src,
+                            strength: parseInt(filters['slimming']) || 50
+                        })
+                    });
+                    const result = await response.json();
+                    if (result.image) {
+                        previewImage.src = result.image;
+                        subjectImage.src = result.image;
+                        alert(result.detected ? "瘦腿处理完成！" : "未检测到人体，请确保照片包含全身。");
+                    }
+                } catch (err) {
+                    alert("瘦腿处理失败，请检查后端。");
+                }
+                return;
+            } else if (action === 'leg-stretch-ai') {
+                if (!previewImage.src) return alert("请先导入照片");
+                alert("正在执行 AI 腿部拉长，请稍候...");
+                try {
+                    const response = await fetch('http://localhost:5000/leg_stretch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            image: previewImage.src,
+                            strength: parseInt(filters['slimming']) || 50
+                        })
+                    });
+                    const result = await response.json();
+                    if (result.image) {
+                        previewImage.src = result.image;
+                        subjectImage.src = result.image;
+                        alert(result.detected ? "腿部拉长处理完成！" : "未检测到全身，已执行局部拉长。");
+                    }
+                } catch (err) {
+                    alert("腿部拉长失败，请检查后端。");
+                }
+                return;
+            } else if (action === 'leg-stretch') {
+                alert("正在执行人体姿态估计，拉长腿部...");
+                previewImage.style.transition = '0.5s';
+                previewImage.style.transform += ' scaleY(1.1)';
+                setTimeout(() => previewImage.style.transition = '0.3s', 500);
+                return;
+            } else if (action === 'erase') {
+                alert("正在自动识别并消除路人...");
+                return;
+            }
+            applyStyles();
+        }
+
+        function applyStyles() {
+            // 磨皮模拟：降低对比度 + 增加模糊 + 提高亮度
+            const smooth = filters['beauty-smooth'] / 5; // 最大 20px 模糊
+            const white = filters['beauty-white'] / 2; // 最大 50% 额外亮度
+            
+            const filterStr = `
+                brightness(${parseInt(filters.brightness) + white}%) 
+                contrast(${filters.contrast - (smooth * 2)}%) 
+                saturate(${filters.saturate}%) 
+                blur(${filters.blur}px)
+                grayscale(${filters.grayscale}%) 
+                sepia(${filters.sepia}%) 
+            `;
+            
+            // 背景隔离：如果启用了模糊，只将模糊应用于 backgroundLayer
+            if (filters.blur > 0) {
+                subjectLayer.style.display = 'block';
+                // 同步主体图层的变换
+                const transformStr = `
+                    rotate(${transform.rotate}deg) 
+                    scale(${transform.scale}) 
+                    scaleX(${transform.flipX}) 
+                    scaleY(${transform.flipY})
+                `;
+                subjectLayer.style.transform = transformStr;
+                subjectLayer.style.filter = `brightness(${parseInt(filters.brightness) + white}%) contrast(${filters.contrast - (smooth * 2)}%)`;
+            } else {
+                subjectLayer.style.display = 'none';
+            }
+
+            const transformStr = `
+                rotate(${transform.rotate}deg) 
+                scale(${transform.scale}) 
+                scaleX(${transform.flipX}) 
+                scaleY(${transform.flipY})
+            `;
+            
+            previewImage.style.filter = filterStr;
+            previewImage.style.transform = transformStr;
+        }
+
+        function reset() {
+            filters = { 
+                brightness: 100, contrast: 100, saturate: 100, 
+                blur: 0, grayscale: 0, sepia: 0, 
+                'beauty-smooth': 0, 'beauty-white': 0 
+            };
+            transform = { rotate: 0, scale: 1, flipX: 1, flipY: 1 };
+            applyStyles();
+            selectTool('basic');
+        }
+
+        async function save() {
+            if (!previewImage.src) {
+                alert("请先导入照片");
+                return;
+            }
+            
+            alert("正在处理并保存图片到数据库...");
+            
+            // 在实际应用中，我们会将过滤后的图像绘制到画布并获取 dataURL
+            // 这里我们只保存原始图像（或者我们可以尝试模拟过滤器应用）
+            try {
+                const response = await fetch('http://localhost:5000/upload_photo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: previewImage.src })
+                });
+                const result = await response.json();
+                alert("保存成功！已添加到相册。");
+                window.location.href = 'gallery.html';
+            } catch (err) {
+                console.error("保存失败:", err);
+                alert("保存失败，请检查后端服务。");
+            }
+        }
+
+        function copyAiText() {
+            const content = document.getElementById('aiCopyContent').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                alert("文案已复制到剪贴板！");
+            });
+        }
+
+        // 初始化
+        selectTool('basic');
+        loadAlbumPhotos();
+    </script>
+</body>
+</html>

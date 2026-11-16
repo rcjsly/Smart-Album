@@ -1,0 +1,32 @@
+# Local secrets and environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*.log
+*.pem
+*.key
+.DS_Store
+Thumbs.db
+
+# Local media, databases, training data and outputs
+uploads/
+dataset/
+datasets/
+yolo_dataset/
+FER/
+runs/
+*.db
+*.db-*
+*.sqlite*
+*.cache
+*.pt
+*.pth
+*.pkl
+*.onnx
+*.mp4
+*.avi

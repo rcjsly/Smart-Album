@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能相册系统 - 设置</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .settings-container {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            height: calc(100vh - 60px);
+            background-color: white;
+            box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+            margin: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .settings-sidebar {
+            background-color: #f9fafc;
+            border-right: 1px solid var(--border-color);
+            padding: 20px 0;
+        }
+
+        .setting-nav-item {
+            padding: 12px 24px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #606266;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .setting-nav-item:hover, .setting-nav-item.active {
+            background-color: #e6f1fc;
+            color: var(--primary-color);
+            border-right: 3px solid var(--primary-color);
+        }
+
+        .settings-content {
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .setting-group {
+            margin-bottom: 40px;
+        }
+
+        .setting-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .form-item {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #606266;
+        }
+
+        .status-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .status-success {
+            background-color: #f0f9eb;
+            color: #67c23a;
+        }
+
+        .status-warning {
+            background-color: #fdf6ec;
+            color: #e6a23c;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <span style="font-size: 24px;">📸</span> 智能相册系统
+        </div>
+        <nav class="nav-menu">
+            <a href="index.html" class="nav-item">主页</a>
+            <a href="camera.html" class="nav-item">拍照</a>
+            <a href="gallery.html" class="nav-item">浏览</a>
+            <a href="editor.html" class="nav-item">编辑</a>
+            <a href="settings.html" class="nav-item active">设置</a>
+        </nav>
+    </header>
+
+    <div class="settings-container">
+        <!-- Sidebar -->
+        <aside class="settings-sidebar">
+            <div class="setting-nav-item active" onclick="showSection('general')">
+                <span>⚙️</span> 通用设置
+            </div>
+            <div class="setting-nav-item" onclick="showSection('storage')">
+                <span>💾</span> 存储管理
+            </div>
+            <div class="setting-nav-item" onclick="showSection('privacy')">
+                <span>🔒</span> 隐私安全
+            </div>
+            <div class="setting-nav-item" onclick="showSection('database')">
+                <span>🗄️</span> 数据库管理
+            </div>
+            <div class="setting-nav-item" onclick="showSection('about')">
+                <span>ℹ️</span> 关于系统
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <main class="settings-content" id="settingsContent">
+            <!-- General Section -->
+            <div id="general" class="setting-group">
+                <div class="setting-title">通用设置</div>
+                <div class="form-item">
+                    <label class="form-label">主题外观</label>
+                    <select class="input-control" style="width: 200px;">
+                        <option>跟随系统</option>
+                        <option>明亮模式</option>
+                        <option>深色模式</option>
+                    </select>
+                </div>
+                <div class="form-item">
+                    <label class="form-label">语言</label>
+                    <select class="input-control" style="width: 200px;">
+                        <option>简体中文</option>
+                        <option>English</option>
+                    </select>
+                </div>
+                <div class="form-item">
+                    <label class="form-label">启动页</label>
+                    <select class="input-control" style="width: 200px;">
+                        <option>主页</option>
+                        <option>上次浏览位置</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Storage Section -->
+            <div id="storage" class="setting-group" style="display: none;">
+                <div class="setting-title">存储管理</div>
+                <div class="form-item">
+                    <label class="form-label">存储路径</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" class="input-control" value="D:\SmartAlbum\Photos" readonly>
+                        <button class="btn btn-default">更改</button>
+                    </div>
+                </div>
+                <div class="form-item">
+                    <label class="form-label">缓存大小</label>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <span style="font-size: 24px; font-weight: bold;">256 MB</span>
+                        <button class="btn btn-default" onclick="clearCache()">🧹 清理缓存</button>
+                    </div>
+                </div>
+                <div class="form-item">
+                    <label class="form-label">备份与恢复</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="backup()">☁️ 立即备份</button>
+                        <button class="btn btn-default" onclick="restore()">📥 恢复数据</button>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #909399;">上次备份: 2026-03-08 14:30</div>
+                </div>
+            </div>
+
+            <!-- Privacy Section -->
+            <div id="privacy" class="setting-group" style="display: none;">
+                <div class="setting-title">隐私安全</div>
+                <div class="form-item">
+                    <label class="form-label">人脸识别</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="faceRec" checked>
+                        <label for="faceRec">开启本地人脸聚类</label>
+                    </div>
+                    <p style="font-size: 12px; color: #909399; margin-top: 5px;">仅在本地处理，不会上传云端。</p>
+                </div>
+            </div>
+
+            <!-- Database Section -->
+            <div id="database" class="setting-group" style="display: none;">
+                <div class="setting-title">数据库管理</div>
+                <div class="form-item">
+                    <label class="form-label">数据库状态</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span class="status-tag status-success">运行中</span>
+                        <span style="font-size: 12px; color: #666;">SQLite 3.39.2</span>
+                    </div>
+                </div>
+                <div class="form-item">
+                    <label class="form-label">维护操作</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-default" onclick="dbAction('optimize')">优化索引</button>
+                        <button class="btn btn-default" onclick="dbAction('check')">一致性检查</button>
+                        <button class="btn btn-default" onclick="dbAction('vacuum')">空间回收 (Vacuum)</button>
+                    </div>
+                </div>
+                <div class="form-item">
+                    <label class="form-label">统计信息</label>
+                    <div style="background: #f5f7fa; padding: 15px; border-radius: 4px; font-size: 13px; line-height: 1.8;">
+                        <div>照片记录: 1,284 条</div>
+                        <div>人脸数据: 342 个</div>
+                        <div>标签索引: 156 个</div>
+                        <div>数据库大小: 12.5 MB</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+                <button class="btn btn-primary" onclick="saveSettings()">保存更改</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function showSection(id) {
+            // Hide all sections
+            document.querySelectorAll('.setting-group').forEach(el => el.style.display = 'none');
+            // Show target section
+            const target = document.getElementById(id);
+            if (target) target.style.display = 'block';
+
+            // Update sidebar active state
+            document.querySelectorAll('.setting-nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        function clearCache() {
+            if(confirm("确定要清理缓存吗？这将释放磁盘空间。")) {
+                alert("缓存清理成功！释放了 256MB 空间。");
+            }
+        }
+        
+        function dbAction(action) {
+            const actions = {
+                'optimize': '优化索引',
+                'check': '一致性检查',
+                'vacuum': '空间回收'
+            };
+            alert(`正在执行数据库${actions[action]}...`);
+            setTimeout(() => {
+                alert(`${actions[action]}完成！`);
+            }, 1000);
+        }
+
+        function backup() {
+            alert("正在备份数据...");
+            setTimeout(() => {
+                alert("备份完成！");
+            }, 1500);
+        }
+
+        function restore() {
+            if(confirm("确定要恢复数据吗？当前未保存的更改可能会丢失。")) {
+                alert("数据恢复成功！");
+            }
+        }
+
+        function saveSettings() {
+            alert("设置已保存！");
+        }
+    </script>
+</body>
+</html>

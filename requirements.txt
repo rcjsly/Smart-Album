@@ -1,0 +1,13 @@
+flask
+flask-cors
+torch
+torchvision
+pillow
+opencv-python
+numpy==1.26.4
+ultralytics
+facenet-pytorch
+matplotlib==3.7.1
+mediapipe==0.10.10
+openai>=1.0,<3
+moviepy==1.0.3

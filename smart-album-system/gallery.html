@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能相册系统 - 浏览</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .filter-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .date-filters {
+            display: flex;
+            gap: 10px;
+        }
+
+        .photo-grid-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            overflow-y: auto;
+            max-height: calc(100vh - 160px);
+            padding-right: 10px;
+        }
+
+        .date-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .date-header {
+            font-size: 18px;
+            font-weight: bold;
+            color: #303133;
+            padding-left: 5px;
+            border-left: 4px solid var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+        }
+
+        .photo-card {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .photo-card:hover {
+            transform: scale(1.05);
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(245, 108, 108, 0.9);
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: none;
+            z-index: 10;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .photo-card:hover .delete-btn {
+            display: flex;
+        }
+
+        .photo-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Lightbox/Zoom Styles */
+        .lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            cursor: pointer;
+        }
+
+        .lightbox img, .lightbox video {
+            max-width: 90%;
+            max-height: 90%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+        }
+
+        .face-search-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 500px;
+            max-width: 90%;
+        }
+
+        .face-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .face-item {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #eee;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .face-item.selected {
+            border-color: var(--primary-color);
+        }
+
+        .zoom-controls {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            background: white;
+            padding: 10px;
+            border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid #eee;
+            background: white;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+
+        .zoom-btn:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .upload-search-box {
+            border: 2px dashed #ddd;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .upload-search-box:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .photo-card.selected {
+            border: 3px solid var(--primary-color);
+            box-shadow: 0 0 10px var(--primary-color);
+        }
+
+        .select-badge {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            border: 2px solid #ddd;
+            display: none;
+            z-index: 5;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .photo-card.selected .select-badge {
+            display: flex;
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .video-gen-bar {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <span style="font-size: 24px;">📸</span> 智能相册系统
+        </div>
+        <nav class="nav-menu">
+            <a href="index.html" class="nav-item">主页</a>
+            <a href="camera.html" class="nav-item">拍照</a>
+            <a href="gallery.html" class="nav-item active">浏览</a>
+            <a href="editor.html" class="nav-item">编辑</a>
+            <a href="settings.html" class="nav-item">设置</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-item active" onclick="filterType('all')">全部内容</div>
+            <div class="sidebar-item" onclick="filterType('photo')">照片</div>
+            <div class="sidebar-item" onclick="filterType('video')">视频</div>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+            <div class="sidebar-item">我的收藏</div>
+            <div class="sidebar-item">回收站</div>
+        </aside>
+
+        <main class="main-content">
+            <div class="filter-bar">
+                <div class="date-filters">
+                    <select class="input-control" style="width: 140px;" id="modelSelect" onchange="switchModel(this.value)">
+                        <option value="custom">自训练表情模型</option>
+                        <option value="pretrained">预训练表情模型</option>
+                    </select>
+                    <select class="input-control" style="width: 140px;" id="detectSelect" onchange="switchDetection(this.value)">
+                        <option value="haar">Haar 检测 (内置)</option>
+                        <option value="yolo_pretrained">YOLOv11n (预训练)</option>
+                        <option value="yolo_custom">YOLO 自训练模型</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-default" id="multiSelectBtn" onclick="toggleMultiSelect()">✔️ 多选模式</button>
+                    <button class="btn btn-primary" onclick="openFaceMatch()">👥 人脸比对</button>
+                    <button class="btn btn-primary" onclick="openFaceSearch()">🔍 人脸检索</button>
+                    <button class="btn btn-default" onclick="document.getElementById('fileInput').click()">📤 导入图片</button>
+                </div>
+                <input type="file" id="fileInput" style="display: none;" accept="image/*" onchange="importPhoto(this)">
+            </div>
+
+            <div class="photo-grid-container" id="photoGrid">
+                <!-- Photos populated by JS -->
+            </div>
+
+            <div class="video-gen-bar" id="videoBar">
+                <div style="font-weight: bold;">已选择 <span id="selectCount">0</span> 张图片</div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span>每张时长(秒):</span>
+                    <input type="number" id="videoDuration" value="2.0" step="0.5" min="0.5" max="10" class="input-control" style="width: 70px;">
+                </div>
+                <button class="btn btn-primary" onclick="generateVideo()">🎬 合成自媒体视频</button>
+                <button class="btn btn-default" onclick="toggleMultiSelect()">取消</button>
+            </div>
+            
+            <!-- Gesture Simulation Controls -->
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="zoomGrid(-1)">－</button>
+                <div style="display: flex; align-items: center; font-size: 12px; color: #666;">手势缩放</div>
+                <button class="zoom-btn" onclick="zoomGrid(1)">＋</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Face Match Modal (Stage 1) -->
+    <div class="face-search-modal" id="faceMatchModal">
+        <div class="modal-content">
+            <h3>人脸比对 (Siamese Network)</h3>
+            <p>上传两张人脸图片，判断它们是否为同一人</p>
+            <div style="display: flex; gap: 15px; margin-top: 20px;">
+                <div class="upload-search-box" style="flex: 1;" onclick="document.getElementById('matchInput1').click()">
+                    <span id="matchStatus1">图 1</span>
+                    <input type="file" id="matchInput1" style="display: none;" accept="image/*" onchange="previewMatch(this, 1)">
+                    <img id="preview1" style="display: none; width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <div class="upload-search-box" style="flex: 1;" onclick="document.getElementById('matchInput2').click()">
+                    <span id="matchStatus2">图 2</span>
+                    <input type="file" id="matchInput2" style="display: none;" accept="image/*" onchange="previewMatch(this, 2)">
+                    <img id="preview2" style="display: none; width: 100%; height: 100%; object-fit: cover;">
+                </div>
+            </div>
+            <div id="matchResult" style="margin-top: 15px; text-align: center; font-size: 18px; font-weight: bold;"></div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="performFaceMatch()">开始比对</button>
+                <button class="btn btn-default" onclick="closeFaceMatch()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Face Search Modal -->
+    <div class="face-search-modal" id="faceModal">
+        <div class="modal-content">
+            <h3>人脸检索</h3>
+            <p>上传一张照片，找出相册中该人的所有照片</p>
+            <div class="upload-search-box" onclick="document.getElementById('faceSearchInput').click()">
+                <span id="searchStatus">点击上传人脸照片</span>
+                <input type="file" id="faceSearchInput" style="display: none;" accept="image/*" onchange="performFaceSearch(this)">
+            </div>
+            <div id="searchResultInfo" style="margin-top: 10px; color: var(--primary-color); font-weight: bold;"></div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-default" onclick="closeFaceSearch()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox for Zoom -->
+    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+        <span class="lightbox-close">&times;</span>
+        <div id="lightboxContent" onclick="event.stopPropagation()"></div>
+    </div>
+
+    <script>
+        const photoGrid = document.getElementById('photoGrid');
+        const faceModal = document.getElementById('faceModal');
+        const videoBar = document.getElementById('videoBar');
+        const selectCountSpan = document.getElementById('selectCount');
+        const multiSelectBtn = document.getElementById('multiSelectBtn');
+
+        let currentFilter = 'all';
+        let currentZoom = 180;
+        let items = []; 
+        
+        let isMultiSelect = false;
+        let selectedIds = new Set();
+        
+        // Fetch Real Data from Backend
+        async function fetchPhotos() {
+            try {
+                const response = await fetch('http://localhost:5000/get_photos');
+                const result = await response.json();
+                items = result.photos || result; // Handle both array and {photos: []}
+                renderItems();
+            } catch (err) {
+                console.error("Failed to fetch photos:", err);
+                photoGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #909399;">暂无照片，请先去拍照。</div>';
+            }
+        }
+
+        // Emotion mapping for UI
+        const emotionMap = {
+            'angry': '生气 😡',
+            'disgust': '厌恶 🤢',
+            'fear': '恐惧 😨',
+            'happy': '开心 😊',
+            'neutral': '平静 😐',
+            'sad': '悲伤 😢',
+            'surprise': '惊讶 😲'
+        };
+
+        function toggleMultiSelect() {
+            isMultiSelect = !isMultiSelect;
+            if (!isMultiSelect) {
+                selectedIds.clear();
+                videoBar.style.display = 'none';
+                multiSelectBtn.classList.remove('btn-primary');
+                multiSelectBtn.classList.add('btn-default');
+            } else {
+                videoBar.style.display = 'flex';
+                multiSelectBtn.classList.remove('btn-default');
+                multiSelectBtn.classList.add('btn-primary');
+            }
+            renderItems();
+        }
+
+        function togglePhotoSelection(id) {
+            if (!isMultiSelect) return;
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                selectedIds.add(id);
+            }
+            selectCountSpan.textContent = selectedIds.size;
+            renderItems();
+        }
+
+        async function generateVideo() {
+            if (selectedIds.size < 2) {
+                alert("请至少选择 2 张图片进行合成");
+                return;
+            }
+            
+            const duration = document.getElementById('videoDuration').value;
+            const btn = event.target;
+            const originalText = btn.textContent;
+            
+            btn.disabled = true;
+            btn.textContent = "⏳ 正在合成视频，请稍候...";
+            
+            try {
+                const response = await fetch('http://localhost:5000/generate_video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        photo_ids: Array.from(selectedIds),
+                        duration: duration
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert("视频合成成功！");
+                    toggleMultiSelect(); // Exit selection mode
+                    fetchPhotos(); // Refresh gallery
+                    // Open the video
+                    openLightbox({ type: 'video', url: result.video_url });
+                } else {
+                    alert("合成失败: " + result.error);
+                }
+            } catch (err) {
+                alert("无法连接到服务器");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // Render Items
+        function renderItems() {
+            photoGrid.innerHTML = '';
+            
+            const filtered = items.filter(item => {
+                if (currentFilter === 'all') return true;
+                return item.type === currentFilter;
+            });
+            
+            if (filtered.length === 0) {
+                photoGrid.innerHTML = '<div style="text-align: center; padding: 40px; color: #909399; font-size: 16px;">📂 暂无内容，快去拍照或导入吧</div>';
+                return;
+            }
+
+            // --- 按日期分组逻辑 ---
+            const groups = {};
+            filtered.forEach(item => {
+                // 处理 created_at 或 timestamp
+                const dateStr = (item.created_at || item.timestamp || "").split(' ')[0] || "未知日期";
+                if (!groups[dateStr]) groups[dateStr] = [];
+                groups[dateStr].push(item);
+            });
+
+            // 获取排序后的日期（降序）
+            const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+            sortedDates.forEach(date => {
+                const dateGroup = document.createElement('div');
+                dateGroup.className = 'date-group';
+                
+                const dateHeader = document.createElement('div');
+                dateHeader.className = 'date-header';
+                dateHeader.innerHTML = `
+                    <span>${date}</span>
+                    <span style="font-size: 12px; color: #909399; font-weight: normal;">${groups[date].length} 个内容</span>
+                `;
+                
+                const gridLayout = document.createElement('div');
+                gridLayout.className = 'grid-layout';
+                gridLayout.style.gridTemplateColumns = `repeat(auto-fill, minmax(${currentZoom}px, 1fr))`;
+                
+                groups[date].forEach(item => {
+                    const isSelected = selectedIds.has(item.id);
+                    const div = document.createElement('div');
+                    div.className = `photo-card ${isSelected ? 'selected' : ''}`;
+                    
+                    div.onclick = () => {
+                        if (isMultiSelect) {
+                            togglePhotoSelection(item.id);
+                        } else {
+                            openLightbox(item);
+                        }
+                    };
+
+                    /* 移除了 emotionBadge 相关代码，不再在照片左上角显示表情标签 */
+                    
+                    div.innerHTML = `
+                        <div style="height: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #f5f7fa; position: relative; overflow: hidden;">
+                            <div class="select-badge">${Array.from(selectedIds).indexOf(item.id) + 1}</div>
+                            <button class="delete-btn" onclick="event.stopPropagation(); deleteItem('${item.id}')">×</button>
+                            ${item.type === 'video' ? 
+                                `<video src="${item.url}" style="width: 100%; height: 100%; object-fit: cover;"></video><span style="font-size: 40px; color: white; opacity: 0.8; position: absolute;">▶</span>` : 
+                                `<img src="${item.url}" style="width: 100%; height: 100%; object-fit: cover;">`
+                            }
+                        </div>
+                    `;
+                    gridLayout.appendChild(div);
+                });
+                
+                dateGroup.appendChild(dateHeader);
+                dateGroup.appendChild(gridLayout);
+                photoGrid.appendChild(dateGroup);
+            });
+        }
+
+        // Zoom/Lightbox functions
+        function openLightbox(item) {
+            const lightbox = document.getElementById('lightbox');
+            const content = document.getElementById('lightboxContent');
+            lightbox.style.display = 'flex';
+            
+            if (item.type === 'video') {
+                content.innerHTML = `<video src="${item.url}" controls autoplay style="max-width:100%; max-height:80vh;"></video>`;
+            } else {
+                content.innerHTML = `<img src="${item.url}" style="max-width:100%; max-height:80vh;">`;
+            }
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+            document.getElementById('lightboxContent').innerHTML = '';
+        }
+
+        // Delete function
+        async function deleteItem(id) {
+            if (!confirm("确定要删除这张照片/视频吗？")) return;
+
+            try {
+                const response = await fetch(`http://localhost:5000/delete_item/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    fetchPhotos(); // Refresh list
+                } else {
+                    alert("删除失败");
+                }
+            } catch (err) {
+                console.error("Delete error:", err);
+            }
+        }
+
+        // Gesture/Zoom Simulation
+        function zoomGrid(dir) {
+            currentZoom += dir * 40;
+            if(currentZoom < 100) currentZoom = 100;
+            if(currentZoom > 400) currentZoom = 400;
+            renderItems();
+        }
+
+        function filterType(type) {
+            currentFilter = type;
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            renderItems();
+        }
+
+        // Swipe Simulation
+        let startX = 0;
+        function startSwipe(e) {
+            startX = e.clientX;
+        }
+        function endSwipe(e) {
+            const diff = e.clientX - startX;
+            if (Math.abs(diff) > 100) {
+                alert(diff > 0 ? "手势：切换上一张" : "手势：切换下一张");
+            }
+        }
+
+        // Initial Fetch
+        fetchPhotos();
+
+        // Import Photo and detect smile
+        async function importPhoto(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const dataUrl = e.target.result;
+                
+                // Show a loading state
+                const originalText = document.querySelector('button[onclick*="fileInput"]').textContent;
+                document.querySelector('button[onclick*="fileInput"]').textContent = '正在导入并分析...';
+
+                try {
+                    const response = await fetch('http://localhost:5000/upload_photo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: dataUrl })
+                    });
+                    
+                    const result = await response.json();
+                    console.log("Imported photo analyzed:", result);
+                    
+                    // Show a result alert/toast using the 7-class emotion map
+                    const emotionLabel = emotionMap[result.emotion] || result.emotion;
+                    const status = `检测结果: ${emotionLabel} (${(result.confidence*100).toFixed(1)}%)`;
+                    alert(`导入成功！\n${status}\n照片已保存到相册。`);
+                    
+                    // Refresh gallery to show new photo
+                    fetchPhotos();
+                } catch (err) {
+                    console.error("Failed to import photo:", err);
+                    alert("导入失败，请检查后端服务是否正常启动。");
+                } finally {
+                    document.querySelector('button[onclick*="fileInput"]').textContent = originalText;
+                    input.value = ''; // Reset file input
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Switch Emotion Detection Model
+        async function switchModel(type) {
+            try {
+                const response = await fetch('http://localhost:5000/switch_model', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: type })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(`成功切换到: ${result.current_model}`);
+                }
+            } catch (err) {
+                console.error("Failed to switch model:", err);
+                alert("切换模型失败");
+            }
+        }
+
+        // Switch Detection Model
+        async function switchDetection(val) {
+            let mode = 'haar';
+            let path = 'yolo11n.pt';
+            
+            if (val === 'yolo_pretrained') {
+                mode = 'yolo';
+                path = 'yolo11n.pt';
+            } else if (val === 'yolo_custom') {
+                mode = 'yolo';
+                path = 'runs/detect/yolo_face_model/weights/best.pt'; // 假设训练后的路径
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/switch_detection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: mode, path: path })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(`成功切换检测模式: ${result.mode} ${result.model || ''}`);
+                } else {
+                    alert(result.error);
+                }
+            } catch (err) {
+                console.error("Failed to switch detection:", err);
+                alert("切换检测模式失败");
+            }
+        }
+
+        // Perform Face Search
+        async function performFaceSearch(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const searchStatus = document.getElementById('searchStatus');
+            const searchResultInfo = document.getElementById('searchResultInfo');
+            searchStatus.textContent = '正在提取特征并检索...';
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const dataUrl = e.target.result;
+                try {
+                    const response = await fetch('http://localhost:5000/search_face', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: dataUrl })
+                    });
+                    
+                    const results = await response.json();
+                    if (results.error) {
+                        alert(results.error);
+                        searchStatus.textContent = '点击上传人脸照片';
+                        return;
+                    }
+
+                    if (results.length === 0) {
+                        searchResultInfo.textContent = '未找到匹配的照片';
+                    } else {
+                        searchResultInfo.textContent = `找到 ${results.length} 张匹配的照片`;
+                        // Highlight results in gallery
+                        items = results; // Temporarily replace items with search results
+                        renderItems();
+                        closeFaceSearch();
+                    }
+                } catch (err) {
+                    console.error("Face search failed:", err);
+                    alert("人脸检索失败");
+                } finally {
+                    searchStatus.textContent = '点击上传人脸照片';
+                    input.value = '';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Modal Functions
+        function openFaceMatch() {
+            document.getElementById('matchResult').textContent = '';
+            document.getElementById('preview1').style.display = 'none';
+            document.getElementById('preview2').style.display = 'none';
+            document.getElementById('matchStatus1').style.display = 'block';
+            document.getElementById('matchStatus2').style.display = 'block';
+            document.getElementById('faceMatchModal').style.display = 'flex';
+        }
+
+        function closeFaceMatch() {
+            document.getElementById('faceMatchModal').style.display = 'none';
+        }
+
+        function previewMatch(input, id) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = document.getElementById(`preview${id}`);
+                const status = document.getElementById(`matchStatus${id}`);
+                img.src = e.target.result;
+                img.style.display = 'block';
+                status.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function performFaceMatch() {
+            const img1 = document.getElementById('preview1').src;
+            const img2 = document.getElementById('preview2').src;
+            if (!img1 || !img2) {
+                alert("请先选择两张图片");
+                return;
+            }
+
+            const matchResult = document.getElementById('matchResult');
+            matchResult.textContent = '正在分析比对...';
+            
+            try {
+                const response = await fetch('http://localhost:5000/match_faces', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image1: img1, image2: img2 })
+                });
+                
+                const result = await response.json();
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+                
+                const similarityPercent = (result.similarity * 100).toFixed(1);
+                if (result.is_same_person) {
+                    matchResult.style.color = '#67C23A';
+                    matchResult.textContent = `判定为同一人 ✅ (相似度: ${similarityPercent}%)`;
+                } else {
+                    matchResult.style.color = '#F56C6C';
+                    matchResult.textContent = `判定为不同人 ❌ (相似度: ${similarityPercent}%)`;
+                }
+            } catch (err) {
+                console.error("Match failed:", err);
+                alert("人脸比对失败");
+            }
+        }
+
+        function openFaceSearch() {
+            document.getElementById('searchResultInfo').textContent = '';
+            faceModal.style.display = 'flex';
+        }
+
+        function closeFaceSearch() {
+            faceModal.style.display = 'none';
+        }
+
+        function selectFace(el) {
+            document.querySelectorAll('.face-item').forEach(i => i.classList.remove('selected'));
+            el.classList.add('selected');
+        }
+
+        function triggerUploadSearch() {
+            alert("模拟：已选择照片 face_query.jpg");
+            performSearch();
+        }
+
+        function performSearch() {
+            alert("正在搜索相似人脸...");
+            closeFaceSearch();
+            // Mock filter
+            photoGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px;">找到 5 张匹配的照片</div>';
+            setTimeout(renderItems, 2000);
+        }
+
+        // Close modal on outside click
+        faceModal.addEventListener('click', (e) => {
+            if (e.target === faceModal) closeFaceSearch();
+        });
+    </script>
+</body>
+</html>

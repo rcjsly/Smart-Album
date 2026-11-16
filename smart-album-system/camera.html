@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能相册系统 - 拍照</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #000;
+            color: white;
+            position: relative;
+        }
+
+        .camera-header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .camera-preview {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .camera-controls {
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            background: rgba(0,0,0,0.5);
+        }
+
+        .capture-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: white;
+            border: 4px solid rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .capture-btn:active {
+            transform: scale(0.95);
+        }
+
+        .switch-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .smile-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+        }
+        
+        .smile-toggle.active {
+            background: var(--primary-color);
+        }
+
+        .thumbnail {
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            background: #333;
+            overflow: hidden;
+            border: 2px solid white;
+        }
+
+        .status-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+            z-index: 20;
+        }
+
+        /* Nav overlay */
+        .nav-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 100;
+        }
+        
+        .back-btn {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 16px;
+        }
+
+        .mode-switch {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            background: rgba(0,0,0,0.3);
+            padding: 5px 15px;
+            border-radius: 20px;
+        }
+
+        .mode-item {
+            color: #ccc;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .mode-item.active {
+            color: #FFD700;
+        }
+
+        .capture-btn.video-mode {
+            background-color: #ff4d4f;
+            border-color: rgba(255, 77, 79, 0.3);
+        }
+        .camera-preview video, .camera-preview canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* 保持比例裁剪铺满 */
+        }
+        
+        #overlay {
+            display: none;
+            pointer-events: none;
+            z-index: 10; /* 确保在视频上方 */
+            background-color: transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="camera-container">
+        <!-- Overlay Navigation for consistency -->
+        <div class="camera-header">
+            <a href="index.html" class="back-btn">
+                <span>←</span> 返回主页
+            </a>
+            <div class="smile-toggle" id="smileToggle">
+                <span>😊</span> 自动笑脸抓拍: <span id="smileStatus">关</span>
+            </div>
+            <div class="smile-toggle" id="whitenToggle" style="margin-left: 10px;">
+                <span>✨</span> AI 实时美白: <span id="whitenStatus">关</span>
+            </div>
+            <div class="smile-toggle" id="slimToggle" style="margin-left: 10px;">
+                <span>🧍</span> AI 实时瘦腿: <span id="slimStatus">关</span>
+            </div>
+            <div class="smile-toggle" id="blurToggle" style="margin-left: 10px;">
+                <span>🌫️</span> 背景羽化: <span id="blurStatus">关</span>
+            </div>
+            <div class="smile-toggle" id="removeToggle" style="margin-left: 10px;">
+                <span>🚫</span> 路人擦除: <span id="removeStatus">关</span>
+            </div>
+            <div style="width: 80px;"></div> <!-- Spacer for center alignment -->
+        </div>
+
+        <div class="camera-preview">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="overlay"></canvas>
+            <div class="status-msg" id="statusMsg">检测到笑脸，自动拍摄！</div>
+            <canvas id="canvas" style="display: none;"></canvas>
+            
+            <div class="mode-switch">
+                <span class="mode-item active" onclick="setMode('photo')">拍照</span>
+                <span class="mode-item" onclick="setMode('video')">视频</span>
+            </div>
+        </div>
+
+        <div class="camera-controls">
+            <div class="thumbnail" id="lastPhoto">
+                <!-- Last photo preview -->
+            </div>
+            <button class="capture-btn" id="captureBtn"></button>
+            <button class="switch-btn" id="switchCamera">
+                🔄
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const overlay = document.getElementById('overlay');
+        const captureBtn = document.getElementById('captureBtn');
+        const lastPhoto = document.getElementById('lastPhoto');
+        const smileToggle = document.getElementById('smileToggle');
+        const smileStatus = document.getElementById('smileStatus');
+        const whitenToggle = document.getElementById('whitenToggle');
+        const whitenStatus = document.getElementById('whitenStatus');
+        const slimToggle = document.getElementById('slimToggle');
+        const slimStatus = document.getElementById('slimStatus');
+        const blurToggle = document.getElementById('blurToggle');
+        const blurStatus = document.getElementById('blurStatus');
+        const removeToggle = document.getElementById('removeToggle');
+        const removeStatus = document.getElementById('removeStatus');
+        
+        let stream = null;
+        let isSmileMode = false;
+        let isWhitenMode = false;
+        let isSlimMode = false;
+        let isBlurMode = false;
+        let isRemoveMode = false;
+        let smileInterval = null;
+        let whitenInterval = null;
+        let slimInterval = null;
+        let blurInterval = null;
+        let removeInterval = null;
+        let processingLock = false; // 并发锁，防止请求堆积导致卡顿
+        let currentMode = 'photo';
+        let isRecording = false;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isCapturing = false; // Prevent multiple captures at once
+
+        // Initialize Camera with Optimization (Lag Fix)
+        async function initCamera() {
+            try {
+                const constraints = { 
+                    video: { 
+                        width: { ideal: 1280 }, 
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    }, 
+                    audio: true 
+                };
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+            } catch (err) {
+                console.error("Camera access error:", err);
+                alert("无法访问摄像头，请检查权限。");
+                video.poster = "https://via.placeholder.com/1280x720/000000/FFFFFF?text=Camera+Preview";
+            }
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-item').forEach(el => {
+                el.classList.remove('active');
+                if(el.textContent === (mode === 'photo' ? '拍照' : '视频')) el.classList.add('active');
+            });
+
+            if (mode === 'video') {
+                captureBtn.classList.add('video-mode');
+                // Disable smile detection UI in video mode
+                smileToggle.style.opacity = '0.3';
+                smileToggle.style.pointerEvents = 'none';
+                whitenToggle.style.opacity = '0.3';
+                whitenToggle.style.pointerEvents = 'none';
+                slimToggle.style.opacity = '0.3';
+                slimToggle.style.pointerEvents = 'none';
+                stopSmileDetection();
+                stopWhitenMode();
+                stopSlimMode();
+            } else {
+                captureBtn.classList.remove('video-mode');
+                smileToggle.style.opacity = '1';
+                smileToggle.style.pointerEvents = 'auto';
+                whitenToggle.style.opacity = '1';
+                whitenToggle.style.pointerEvents = 'auto';
+                slimToggle.style.opacity = '1';
+                slimToggle.style.pointerEvents = 'auto';
+            }
+        }
+
+        // Emotion mapping for display
+        const emotionMap = {
+            'angry': '生气 😡',
+            'disgust': '厌恶 🤢',
+            'fear': '恐惧 😨',
+            'happy': '开心 😊',
+            'neutral': '平静 😐',
+            'sad': '悲伤 😢',
+            'surprise': '惊讶 😲'
+        };
+
+        // Real-time Emotion Detection Logic
+        async function detectSmile() {
+            if (!isSmileMode || isRecording || isCapturing || currentMode !== 'photo') return;
+
+            // Capture current frame to hidden canvas
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+
+            try {
+                const response = await fetch('http://localhost:5000/predict_smile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: dataUrl })
+                });
+
+                const result = await response.json();
+                
+                // Clear previous overlay
+                const octx = overlay.getContext('2d');
+                octx.clearRect(0, 0, overlay.width, overlay.height);
+
+                // Draw face rectangles
+                if (result.faces && result.faces.length > 0) {
+                    overlay.width = video.videoWidth;
+                    overlay.height = video.videoHeight;
+                    octx.strokeStyle = '#00ff00';
+                    octx.lineWidth = 3;
+                    result.faces.forEach(face => {
+                        octx.strokeRect(face.x, face.y, face.w, face.h);
+                    });
+                }
+
+                // Show current emotion
+                if (result.emotion) {
+                    const label = emotionMap[result.emotion] || result.emotion;
+                    statusMsg.textContent = `当前表情: ${label} (${(result.confidence * 100).toFixed(1)}%)`;
+                    statusMsg.style.display = 'block';
+                    statusMsg.style.background = 'rgba(0, 0, 0, 0.6)';
+                }
+
+                // If backend confirms 'happy' (smiling)
+                if (result.emotion === 'happy' && result.confidence > 0.5) {
+                    isCapturing = true; 
+                    statusMsg.textContent = `检测到超赞笑容！正在抓拍...`;
+                    statusMsg.style.background = 'rgba(255, 105, 180, 0.9)'; // 粉色代表好心情
+                    
+                    await takePhoto();
+                    
+                    setTimeout(() => {
+                        isCapturing = false;
+                    }, 2000);
+                } else {
+                    // Hide after 1 second if not happy
+                    setTimeout(() => {
+                        if (!isCapturing) statusMsg.style.display = 'none';
+                    }, 800);
+                }
+            } catch (err) {
+                console.warn("表情检测服务连接失败", err);
+            }
+        }
+
+        function startSmileDetection() {
+            if (smileInterval) clearInterval(smileInterval);
+            smileInterval = setInterval(detectSmile, 1000); // Check every second
+        }
+
+        function stopSmileDetection() {
+            if (smileInterval) clearInterval(smileInterval);
+            smileInterval = null;
+            // Only hide if whiten/slim is not showing status
+            if (!isWhitenMode && !isSlimMode) statusMsg.style.display = 'none';
+        }
+
+        // Real-time Face Whitening Logic
+        async function applyRealtimeWhiten() {
+            if (!isWhitenMode || isRecording || isCapturing || processingLock) return;
+            processingLock = true;
+
+            // 1. 提高采集分辨率：使用 640px 宽度以保证基本清晰度
+            const processWidth = 640; 
+            const processHeight = Math.floor((video.videoHeight / video.videoWidth) * processWidth);
+            
+            canvas.width = processWidth;
+            canvas.height = processHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, processWidth, processHeight);
+            // 提高压缩质量到 0.8
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8); 
+
+            try {
+                const response = await fetch('http://localhost:5000/whiten_face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: dataUrl, strength: 50 })
+                });
+
+                const result = await response.json();
+                
+                if (result.image && isWhitenMode) {
+                    const whitenedImg = new Image();
+                    whitenedImg.onload = () => {
+                        const octx = overlay.getContext('2d');
+                        
+                        // 使用视频原始分辨率进行渲染，确保清晰
+                        const targetWidth = video.videoWidth;
+                        const targetHeight = video.videoHeight;
+                        
+                        if (overlay.width !== targetWidth || overlay.height !== targetHeight) {
+                            overlay.width = targetWidth;
+                            overlay.height = targetHeight;
+                        }
+                        
+                        octx.drawImage(whitenedImg, 0, 0, targetWidth, targetHeight);
+                        
+                        if (overlay.style.display !== 'block') {
+                            overlay.style.display = 'block';
+                            video.style.opacity = "0"; 
+                        }
+
+                        // 状态提示
+                        statusMsg.style.display = 'block';
+                        statusMsg.textContent = result.detected ? "✨ AI 正在为您美颜..." : "⚠️ 未检测到人脸，尝试全局美化";
+                        statusMsg.style.background = result.detected ? 'rgba(255, 105, 180, 0.7)' : 'rgba(230, 162, 60, 0.7)';
+                    };
+                    whitenedImg.src = result.image;
+                }
+            } catch (err) {
+                console.warn("美白服务连接失败", err);
+            } finally {
+                processingLock = false;
+            }
+        }
+
+        function startWhitenMode() {
+            if (whitenInterval) clearInterval(whitenInterval);
+            whitenInterval = setInterval(applyRealtimeWhiten, 60); 
+        }
+
+        function stopWhitenMode() {
+            if (whitenInterval) clearInterval(whitenInterval);
+            whitenInterval = null;
+            video.style.opacity = "1";
+            video.style.visibility = "visible";
+            overlay.style.display = "none";
+            processingLock = false;
+        }
+
+        // Real-time Body Slimming Logic (Global)
+        async function applyRealtimeSlimming() {
+            if (!isSlimMode || isRecording || isCapturing || processingLock) return;
+            processingLock = true;
+
+            const processWidth = 640;
+            const processHeight = Math.floor((video.videoHeight / video.videoWidth) * processWidth);
+            
+            canvas.width = processWidth;
+            canvas.height = processHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, processWidth, processHeight);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+            try {
+                const response = await fetch('http://localhost:5000/slim_legs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: dataUrl, strength: 60 }) // 调高强度使效果更明显
+                });
+
+                const result = await response.json();
+                
+                if (result.image && isSlimMode) {
+                    const slimmedImg = new Image();
+                    slimmedImg.onload = () => {
+                        const octx = overlay.getContext('2d');
+                        const targetWidth = video.videoWidth;
+                        const targetHeight = video.videoHeight;
+
+                        if (overlay.width !== targetWidth || overlay.height !== targetHeight) {
+                            overlay.width = targetWidth;
+                            overlay.height = targetHeight;
+                        }
+
+                        octx.drawImage(slimmedImg, 0, 0, targetWidth, targetHeight);
+                        
+                        if (overlay.style.display !== 'block') {
+                            overlay.style.display = 'block';
+                            video.style.opacity = "0";
+                        }
+
+                        // 状态提示
+                        statusMsg.style.display = 'block';
+                        statusMsg.textContent = result.detected ? "✨ AI 正在为您瘦身..." : "⚠️ 未检测到人体，执行全局瘦身";
+                        statusMsg.style.background = result.detected ? 'rgba(64, 158, 255, 0.7)' : 'rgba(230, 162, 60, 0.7)';
+                    };
+                    slimmedImg.src = result.image;
+                }
+            } catch (err) {
+                console.warn("瘦身服务连接失败", err);
+            } finally {
+                processingLock = false;
+            }
+        }
+
+        function startSlimMode() {
+            if (slimInterval) clearInterval(slimInterval);
+            slimInterval = setInterval(applyRealtimeSlimming, 40); 
+        }
+
+        function stopSlimMode() {
+            if (slimInterval) clearInterval(slimInterval);
+            slimInterval = null;
+            video.style.opacity = "1";
+            video.style.visibility = "visible";
+            overlay.style.display = "none";
+            processingLock = false;
+        }
+
+        // Real-time Background Blur Logic
+        async function applyRealtimeBlur() {
+            if (!isBlurMode || isRecording || isCapturing || processingLock) return;
+            processingLock = true;
+            const processWidth = 640;
+            const processHeight = Math.floor((video.videoHeight / video.videoWidth) * processWidth);
+            canvas.width = processWidth;
+            canvas.height = processHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, processWidth, processHeight);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            try {
+                const response = await fetch('http://localhost:5000/blur_background', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: dataUrl })
+                });
+                const result = await response.json();
+                if (result.image && isBlurMode) {
+                    const img = new Image();
+                    img.onload = () => {
+                        const octx = overlay.getContext('2d');
+                        overlay.width = video.videoWidth;
+                        overlay.height = video.videoHeight;
+                        octx.drawImage(img, 0, 0, overlay.width, overlay.height);
+                        if (overlay.style.display !== 'block') {
+                            overlay.style.display = 'block';
+                            video.style.opacity = "0";
+                        }
+                    };
+                    img.src = result.image;
+                }
+            } catch (err) { console.warn("背景羽化失败", err); }
+            finally { processingLock = false; }
+        }
+
+        function startBlurMode() {
+            if (blurInterval) clearInterval(blurInterval);
+            blurInterval = setInterval(applyRealtimeBlur, 60);
+        }
+
+        function stopBlurMode() {
+            if (blurInterval) clearInterval(blurInterval);
+            blurInterval = null;
+            video.style.opacity = "1";
+            video.style.visibility = "visible";
+            overlay.style.display = "none";
+            processingLock = false;
+        }
+
+        // Real-time Passerby Removal Logic
+        async function applyRealtimeRemove() {
+            if (!isRemoveMode || isRecording || isCapturing || processingLock) return;
+            processingLock = true;
+            const processWidth = 640;
+            const processHeight = Math.floor((video.videoHeight / video.videoWidth) * processWidth);
+            canvas.width = processWidth;
+            canvas.height = processHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, processWidth, processHeight);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            try {
+                const response = await fetch('http://localhost:5000/remove_passerby', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: dataUrl })
+                });
+                const result = await response.json();
+                if (result.image && isRemoveMode) {
+                    const img = new Image();
+                    img.onload = () => {
+                        const octx = overlay.getContext('2d');
+                        overlay.width = video.videoWidth;
+                        overlay.height = video.videoHeight;
+                        octx.drawImage(img, 0, 0, overlay.width, overlay.height);
+                        if (overlay.style.display !== 'block') {
+                            overlay.style.display = 'block';
+                            video.style.opacity = "0";
+                        }
+                        if (result.removed_count > 0) {
+                            statusMsg.style.display = 'block';
+                            statusMsg.textContent = `🚫 已自动擦除 ${result.removed_count} 个路人`;
+                            statusMsg.style.background = 'rgba(245, 108, 108, 0.8)';
+                        }
+                    };
+                    img.src = result.image;
+                }
+            } catch (err) { console.warn("路人擦除失败", err); }
+            finally { processingLock = false; }
+        }
+
+        function startRemoveMode() {
+            if (removeInterval) clearInterval(removeInterval);
+            removeInterval = setInterval(applyRealtimeRemove, 100);
+        }
+
+        function stopRemoveMode() {
+            if (removeInterval) clearInterval(removeInterval);
+            removeInterval = null;
+            video.style.opacity = "1";
+            video.style.visibility = "visible";
+            overlay.style.display = "none";
+            processingLock = false;
+        }
+
+        // Toggle Whiten Mode
+        whitenToggle.addEventListener('click', () => {
+            if (currentMode === 'video') return;
+            isWhitenMode = !isWhitenMode;
+            if (isWhitenMode) {
+                // 互斥处理
+                isSlimMode = false; slimStatus.textContent = "关"; slimToggle.classList.remove('active'); stopSlimMode();
+                isBlurMode = false; blurStatus.textContent = "关"; blurToggle.classList.remove('active'); stopBlurMode();
+                isRemoveMode = false; removeStatus.textContent = "关"; removeToggle.classList.remove('active'); stopRemoveMode();
+                
+                whitenToggle.classList.add('active');
+                whitenStatus.textContent = "开";
+                startWhitenMode();
+            } else {
+                whitenToggle.classList.remove('active');
+                whitenStatus.textContent = "关";
+                stopWhitenMode();
+            }
+        });
+
+        slimToggle.addEventListener('click', () => {
+            if (currentMode === 'video') return;
+            isSlimMode = !isSlimMode;
+            if (isSlimMode) {
+                // 互斥处理
+                isWhitenMode = false; whitenStatus.textContent = "关"; whitenToggle.classList.remove('active'); stopWhitenMode();
+                isBlurMode = false; blurStatus.textContent = "关"; blurToggle.classList.remove('active'); stopBlurMode();
+                isRemoveMode = false; removeStatus.textContent = "关"; removeToggle.classList.remove('active'); stopRemoveMode();
+
+                slimToggle.classList.add('active');
+                slimStatus.textContent = "开";
+                startSlimMode();
+            } else {
+                slimToggle.classList.remove('active');
+                slimStatus.textContent = "关";
+                stopSlimMode();
+            }
+        });
+
+        blurToggle.addEventListener('click', () => {
+            if (currentMode === 'video') return;
+            isBlurMode = !isBlurMode;
+            if (isBlurMode) {
+                isWhitenMode = false; whitenStatus.textContent = "关"; whitenToggle.classList.remove('active'); stopWhitenMode();
+                isSlimMode = false; slimStatus.textContent = "关"; slimToggle.classList.remove('active'); stopSlimMode();
+                isRemoveMode = false; removeStatus.textContent = "关"; removeToggle.classList.remove('active'); stopRemoveMode();
+
+                blurToggle.classList.add('active');
+                blurStatus.textContent = "开";
+                startBlurMode();
+            } else {
+                blurToggle.classList.remove('active');
+                blurStatus.textContent = "关";
+                stopBlurMode();
+            }
+        });
+
+        removeToggle.addEventListener('click', () => {
+            if (currentMode === 'video') return;
+            isRemoveMode = !isRemoveMode;
+            if (isRemoveMode) {
+                isWhitenMode = false; whitenStatus.textContent = "关"; whitenToggle.classList.remove('active'); stopWhitenMode();
+                isSlimMode = false; slimStatus.textContent = "关"; slimToggle.classList.remove('active'); stopSlimMode();
+                isBlurMode = false; blurStatus.textContent = "关"; blurToggle.classList.remove('active'); stopBlurMode();
+
+                removeToggle.classList.add('active');
+                removeStatus.textContent = "开";
+                startRemoveMode();
+            } else {
+                removeToggle.classList.remove('active');
+                removeStatus.textContent = "关";
+                stopRemoveMode();
+            }
+        });
+
+        // Toggle Smile Mode
+        smileToggle.addEventListener('click', () => {
+            isSmileMode = !isSmileMode;
+            if (isSmileMode) {
+                smileToggle.classList.add('active');
+                smileStatus.textContent = "开";
+                startSmileDetection();
+            } else {
+                smileToggle.classList.remove('active');
+                smileStatus.textContent = "关";
+                stopSmileDetection();
+            }
+        });
+
+        // Handle Capture (Photo or Video)
+        function handleCapture() {
+            if (currentMode === 'photo') {
+                takePhoto();
+            } else {
+                toggleRecording();
+            }
+        }
+
+        async function toggleRecording() {
+            if (!isRecording) {
+                // Start Recording
+                try {
+                    recordedChunks = [];
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            recordedChunks.push(event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                        const formData = new FormData();
+                        formData.append('video', videoBlob, 'recording.webm');
+
+                        try {
+                            const response = await fetch('http://localhost:5000/upload_video', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            const result = await response.json();
+                            console.log("Video saved:", result);
+                            alert("视频已保存到相册");
+                        } catch (err) {
+                            console.error("Failed to upload video:", err);
+                            alert("视频保存失败");
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    captureBtn.style.transform = "scale(0.8)";
+                    captureBtn.style.borderRadius = "20%";
+                    statusMsg.textContent = "正在录制 00:00";
+                    statusMsg.style.display = "block";
+                    statusMsg.style.background = "rgba(255, 0, 0, 0.7)";
+                    
+                    // Simulate recording timer
+                    let seconds = 0;
+                    window.recordInterval = setInterval(() => {
+                        seconds++;
+                        const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+                        const sec = (seconds % 60).toString().padStart(2, '0');
+                        statusMsg.textContent = `正在录制 ${min}:${sec}`;
+                    }, 1000);
+                } catch (err) {
+                    console.error("Recording failed to start:", err);
+                }
+
+            } else {
+                // Stop Recording
+                isRecording = false;
+                mediaRecorder.stop();
+                captureBtn.style.transform = "scale(1)";
+                captureBtn.style.borderRadius = "50%";
+                statusMsg.style.display = "none";
+                clearInterval(window.recordInterval);
+                
+                // Simulate save video thumbnail
+                lastPhoto.innerHTML = `<div style="width:100%; height:100%; background:#333; display:flex; justify-content:center; align-items:center; color:white; font-size:20px;">▶</div>`;
+            }
+        }
+
+        // Take Photo and Upload
+        async function takePhoto() {
+            // Flash effect
+            const flash = document.createElement('div');
+            flash.style.position = 'fixed';
+            flash.style.top = '0';
+            flash.style.left = '0';
+            flash.style.width = '100%';
+            flash.style.height = '100%';
+            flash.style.backgroundColor = 'white';
+            flash.style.opacity = '0.8';
+            flash.style.zIndex = '999';
+            flash.style.transition = 'opacity 0.5s';
+            document.body.appendChild(flash);
+            setTimeout(() => {
+                flash.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(flash), 500);
+            }, 50);
+
+            // Capture to canvas
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            if (video.srcObject) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "#333";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Show local thumbnail immediately
+            lastPhoto.innerHTML = `<img src="${dataUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+
+            // Upload to backend
+            try {
+                const response = await fetch('http://localhost:5000/upload_photo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: dataUrl })
+                });
+                const result = await response.json();
+                console.log("Photo saved and analyzed:", result);
+                
+                // Show a small toast/hint about smile result
+                if (result.is_smiling) {
+                    const toast = document.createElement('div');
+                    toast.style.cssText = 'position:fixed; bottom:150px; left:50%; transform:translateX(-50%); background:#67C23A; color:white; padding:10px 20px; border-radius:20px; z-index:1000;';
+                    toast.textContent = `检测到笑脸并已保存`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => document.body.removeChild(toast), 3000);
+                }
+            } catch (err) {
+                console.error("Failed to upload photo:", err);
+            }
+        }
+
+        captureBtn.addEventListener('click', handleCapture);
+        
+        // Start camera on load
+        window.addEventListener('load', initCamera);
+    </script>
+</body>
+</html>
